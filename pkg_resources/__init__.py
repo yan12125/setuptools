@@ -38,6 +38,7 @@ import tempfile
 import textwrap
 import itertools
 from pkgutil import get_importer
+from distutils.util import change_root
 
 try:
     import _imp
@@ -420,10 +421,16 @@ def register_loader_type(loader_type, provider_factory):
     _provider_factories[loader_type] = provider_factory
 
 
-def get_provider(moduleOrReq):
+def get_provider(moduleOrReq, root=None):
     """Return an IResourceProvider for the named module or requirement"""
     if isinstance(moduleOrReq, Requirement):
-        return working_set.find(moduleOrReq) or require(str(moduleOrReq))[0]
+        if root is None:
+            target_working_set = working_set
+        else:
+            target_working_set = WorkingSet([change_root(root, pth)
+                                             for pth in sys.path])
+        return (target_working_set.find(moduleOrReq) or
+                target_working_set.require(str(moduleOrReq))[0])
     try:
         module = sys.modules[moduleOrReq]
     except KeyError:
@@ -544,12 +551,12 @@ def run_script(dist_spec, script_name):
 run_main = run_script
 
 
-def get_distribution(dist):
+def get_distribution(dist, root=None):
     """Return a current distribution object for a Requirement or string"""
     if isinstance(dist, six.string_types):
         dist = Requirement.parse(dist)
     if isinstance(dist, Requirement):
-        dist = get_provider(dist)
+        dist = get_provider(dist, root=root)
     if not isinstance(dist, Distribution):
         raise TypeError("Expected string, Requirement, or Distribution", dist)
     return dist
